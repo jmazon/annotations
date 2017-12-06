@@ -5,6 +5,9 @@ import Graphics.Rendering.Pango
 
 import Text.XML.Light
 
+import Data.List
+import Control.Monad
+
 bsearch valid = go 0 where
   go a s = do
     v <- valid s
@@ -20,22 +23,43 @@ simpleName n = blank_name { qName = n }
 main :: IO ()
 main = do
   xml <- parseXML <$> readFile "annotations.xml"
-  let annotations = concatMap (findElements (simpleName "annotation")) (onlyElems xml)
-  print (head annotations)
-  print $ processAnnotation (head annotations)
+  let annotations = sortOn annStart $ map processAnnotation $
+                    concatMap (findElements (simpleName "annotation"))
+                              (onlyElems xml)
+  -- print (head annotations)
 
-  text <- readFile "sampleText"
-  makeAnnotationPng 517 358 text "output.png"
+  let width = 640
+      height = 480
 
-processAnnotation ann = start where
+  -- let 
+      
+  forM_ (zip [0..] annotations) $ \(i,ann) -> do
+    let w = annW ann * width / 100
+        h = annH ann * height / 100
+    print (w,h)
+    makeAnnotationPng w h (annText ann) ("ann" ++ show i ++ ".png")
+
+  putStr $ unlines $ map annText annotations
+  
+
+data Ann = Ann { annText :: String
+               , annStart :: String
+               , annEnd :: String
+               , annX :: Double
+               , annY :: Double
+               , annW :: Double
+               , annH :: Double }
+
+processAnnotation ann = Ann text start end (read x) (read y) (read w) (read h)
+ where
   Just text = strContent <$> findChild (simpleName "TEXT") ann
   [r1,r2] = findElements (simpleName "anchoredRegion") ann
   Just start = findAttr (simpleName "t") r1
   Just end = findAttr (simpleName "t") r2
-  Just x = findAttr (simpleName "x") r2
-  Just y = findAttr (simpleName "y") r2
-  Just w = findAttr (simpleName "w") r2
-  Just h = findAttr (simpleName "h") r2
+  Just x = findAttr (simpleName "x") r1
+  Just y = findAttr (simpleName "y") r1
+  Just w = findAttr (simpleName "w") r1
+  Just h = findAttr (simpleName "h") r1
 
 makeAnnotationPng tWidth tHeight text pngName = do
   p <- cairoCreateContext Nothing
@@ -105,3 +129,4 @@ makeAnnotationPng tWidth tHeight text pngName = do
       showLayout txt
 
     surfaceWriteToPNG s pngName
+  putStrLn $ "Wrote " ++ pngName
